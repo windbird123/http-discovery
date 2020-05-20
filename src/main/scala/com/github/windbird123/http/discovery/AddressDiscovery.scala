@@ -26,12 +26,10 @@ object AddressDiscovery {
 
 object MyApp extends zio.App {
   val myapp = for {
-    ref      <- Ref.make(Seq.empty[String])
-    util     = new AddrUtil(ref)
-    schedule = Schedule.spaced(2.seconds) && Schedule.forever
-    _        <- util.updateAddr().repeat(schedule).fork
+    util     <- AddrUtil.create()
+    schedule = Schedule.spaced(1.seconds) && Schedule.forever
     _        <- util.choose().repeat(schedule).fork
-    _        <- ZIO.sleep(10.seconds)
+    _        <- ZIO.sleep(5.seconds)
   } yield ()
 
   override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] = {
@@ -39,6 +37,16 @@ object MyApp extends zio.App {
     val app   = myapp.provideCustomLayer(layer)
     app.as(0)
   }
+}
+
+object AddrUtil {
+  def create(): ZIO[Clock with Has[AddressDiscovery.Service], Nothing, AddrUtil] =
+    for {
+      ref      <- Ref.make(Seq.empty[String])
+      util     = new AddrUtil(ref)
+      schedule = Schedule.spaced(1.seconds) && Schedule.forever
+      _        <- util.updateAddr().repeat(schedule).fork
+    } yield util
 }
 
 class AddrUtil(ref: Ref[Seq[String]]) {
@@ -49,7 +57,7 @@ class AddrUtil(ref: Ref[Seq[String]]) {
       _    <- ref.set(addr)
     } yield ()
 
-  val schedule: Schedule[Clock, Any, (Int, Int)] = Schedule.spaced(2.seconds) && Schedule.forever
+  val schedule: Schedule[Clock, Any, (Int, Int)] = Schedule.spaced(1.seconds) && Schedule.forever
   def choose(): ZIO[Clock with Has[AddressDiscovery.Service], Nothing, Option[String]] =
     for {
       _   <- updateAddr().repeat(schedule).fork
