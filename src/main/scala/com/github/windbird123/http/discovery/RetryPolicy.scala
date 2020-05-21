@@ -2,7 +2,7 @@ package com.github.windbird123.http.discovery
 
 import zio._
 
-object SmartPolicy {
+object RetryPolicy {
   trait Service {
     val waitUntilServerIsAvailable: Boolean                            = true
     val retryAfterSleepMillis: Long                                    = 10000L

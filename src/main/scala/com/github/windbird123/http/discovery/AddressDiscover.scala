@@ -14,7 +14,7 @@ object AddressDiscover {
 
   val live: Layer[Nothing, Has[Service]] = ZLayer.succeed(
     new Service {
-      override def fetch(discoverUrl: String): Task[String] = UIO("url")
+      override def fetch(discoverUrl: String): Task[String] = UIO("some url list")
 
       override def parse(text: String): Task[Seq[String]] = UIO(Seq("http://date.jsontest.com"))
     }

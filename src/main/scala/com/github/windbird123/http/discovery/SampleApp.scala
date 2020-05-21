@@ -2,19 +2,24 @@ package com.github.windbird123.http.discovery
 
 import scalaj.http.Http
 import zio._
-import zio.duration._
+import zio.blocking.Blocking
+import zio.clock.Clock
+import zio.console.Console
+
+object MainLogic {
+  val service
+    : ZIO[Console with Blocking with Clock with Has[RetryPolicy.Service] with Has[AddressDiscover.Service], Throwable, Unit] =
+    for {
+      client       <- SmartClient.create("url", 1L)
+      (code, body) <- client.execute(Http("/").timeout(2000, 2000))
+      _            <- console.putStrLn(code.toString)
+      _            <- console.putStrLn(new String(body, io.Codec.UTF8.name))
+    } yield ()
+}
 
 object SampleApp extends zio.App {
-
-  val myapp = for {
-    client   <- SmartClient.create("url", 1L)
-    schedule = Schedule.spaced(1.seconds) && Schedule.forever
-    res      <- client.execute(Http("/").timeout(1, 1))
-    _        <- ZIO.sleep(5.seconds)
-  } yield ()
-
   override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] = {
-    val layer = AddressDiscover.live ++ SmartPolicy.live
-    myapp.tapError(x => UIO(x.printStackTrace())).fold(_ => 1, _ => 0).provideCustomLayer(layer)
+    val layer = AddressDiscover.live ++ RetryPolicy.live
+    MainLogic.service.tapError(x => UIO(x.printStackTrace())).fold(_ => 1, _ => 0).provideCustomLayer(layer)
   }
 }

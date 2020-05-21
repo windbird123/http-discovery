@@ -19,18 +19,22 @@ object SmartClient {
 }
 
 class SmartClient(addressFactory: AddressFactory) {
-  def execute(req: HttpRequest): ZIO[Blocking with Clock with Has[SmartPolicy.Service], Throwable, (Int, Array[Byte])] =
+  def execute(
+    req: HttpRequest,
+    blackAddresses: UIO[Seq[String]] = UIO(Seq.empty)
+  ): ZIO[Blocking with Clock with Has[RetryPolicy.Service], Throwable, (Int, Array[Byte])] =
     for {
-      waitUntilServerIsAvailable <- SmartPolicy.waitUntilServerIsAvailable
-      retryAfterSleepMillis      <- SmartPolicy.retryAfterSleepMillis
-
-      chosen       <- addressFactory.choose(waitUntilServerIsAvailable)
-      request      = addressFactory.build(chosen, req)
-      res          <- tryExecute(request).catchAll(_ => execute(req).delay(retryAfterSleepMillis.millis))
-      (code, body) = res
-      worthRetry   <- SmartPolicy.isWorthRetry(code, body)
-      out          <- if (worthRetry) execute(req).delay(retryAfterSleepMillis.millis) else ZIO.succeed(res)
-    } yield out
+      blacks                     <- blackAddresses
+      _                          <- addressFactory.exclude(blacks)
+      waitUntilServerIsAvailable <- RetryPolicy.waitUntilServerIsAvailable
+      chosen                     <- addressFactory.choose(waitUntilServerIsAvailable)
+      request                    = addressFactory.build(chosen, req)
+      retryAfterSleepMillis      <- RetryPolicy.retryAfterSleepMillis
+      res                        <- tryExecute(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMillis.millis))
+      (code, body)               = res
+      worthRetry                 <- RetryPolicy.isWorthRetry(code, body)
+      result                     <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMillis.millis) else ZIO.succeed(res)
+    } yield result
 
   def tryExecute(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
     val schedule: Schedule[Clock, Throwable, ((Int, Int), Throwable)] =

@@ -35,10 +35,12 @@ class AddressFactory(ref: Ref[Seq[String]]) {
       choose(waitUntilServerIsAvailable).delay(3.seconds),
       head.map {
         case Some(x) => Right(x)
-        case None    => Left(new Exception("No available address"))
+        case None    => Left(new Exception("Any available address was not found"))
       }.absolve
     )
   }
+
+  def exclude(blacks: Seq[String]): UIO[Unit] = ref.update(x => x.filterNot(blacks.contains))
 
   def build(chosenBase: String, r: HttpRequest): HttpRequest = r.copy(url = chosenBase + r.url)
 }
