@@ -1,5 +1,6 @@
 package com.github.windbird123.http.discovery
 
+import scalaj.http.HttpRequest
 import zio._
 import zio.clock.Clock
 import zio.duration._
@@ -18,7 +19,7 @@ object AddressFactory {
 }
 
 class AddressFactory(ref: Ref[Seq[String]]) {
-  def update(discoverUrl: String): ZIO[Has[AddressDiscover.Service], Throwable, Unit] =
+  private def update(discoverUrl: String): ZIO[Has[AddressDiscover.Service], Throwable, Unit] =
     for {
       text <- AddressDiscover.fetch(discoverUrl)
       addr <- AddressDiscover.parse(text)
@@ -27,12 +28,17 @@ class AddressFactory(ref: Ref[Seq[String]]) {
 
   def choose(
     waitUntilServerIsAvailable: Boolean
-  ): ZIO[Clock with Has[AddressDiscover.Service], Nothing, Option[String]] = {
+  ): ZIO[Clock, Throwable, String] = {
     val head = ref.get.map(_.headOption)
 
     ZIO.ifM(head.map(_.isEmpty && waitUntilServerIsAvailable))(
-      ZIO.sleep(3.seconds) *> choose(waitUntilServerIsAvailable),
-      head
+      choose(waitUntilServerIsAvailable).delay(3.seconds),
+      head.map {
+        case Some(x) => Right(x)
+        case None    => Left(new Exception("No available address"))
+      }.absolve
     )
   }
+
+  def build(chosenBase: String, r: HttpRequest): HttpRequest = r.copy(url = chosenBase + r.url)
 }

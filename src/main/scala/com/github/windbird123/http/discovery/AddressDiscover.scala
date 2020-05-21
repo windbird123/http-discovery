@@ -16,7 +16,7 @@ object AddressDiscover {
     new Service {
       override def fetch(discoverUrl: String): Task[String] = UIO("url")
 
-      override def parse(text: String): Task[Seq[String]] = UIO(Seq("1"))
+      override def parse(text: String): Task[Seq[String]] = UIO(Seq("http://date.jsontest.com"))
     }
   )
 }
