@@ -5,6 +5,8 @@ import zio._
 import zio.clock.Clock
 import zio.duration._
 
+import scala.util.Random
+
 object AddressFactory {
   def create(
     discoverUrl: String,
@@ -29,11 +31,11 @@ class AddressFactory(ref: Ref[Seq[String]]) {
   def choose(
     waitUntilServerIsAvailable: Boolean
   ): ZIO[Clock, Throwable, String] = {
-    val head = ref.get.map(_.headOption)
+    val randomOne = ref.get.map(addrs => Random.shuffle(addrs).headOption)
 
-    ZIO.ifM(head.map(_.isEmpty && waitUntilServerIsAvailable))(
+    ZIO.ifM(randomOne.map(_.isEmpty && waitUntilServerIsAvailable))(
       choose(waitUntilServerIsAvailable).delay(3.seconds),
-      head.map {
+      randomOne.map {
         case Some(x) => Right(x)
         case None    => Left(new Exception("Any available address was not found"))
       }.absolve
