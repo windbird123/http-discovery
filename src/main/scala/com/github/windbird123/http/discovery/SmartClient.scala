@@ -19,11 +19,22 @@ object SmartClient {
 }
 
 class SmartClient(addressFactory: AddressFactory) {
-  def execute(
-    req: HttpRequest
-  ): ZIO[Blocking with Clock with Has[SmartPolicy.Service], Throwable, (Int, Array[Byte])] = {
-    def tryExecute(r: HttpRequest) = {
-      val schedule = Schedule.spaced(1.second) && Schedule.recurs(3) && Schedule.doWhile[Throwable] {
+  def execute(req: HttpRequest): ZIO[Blocking with Clock with Has[SmartPolicy.Service], Throwable, (Int, Array[Byte])] =
+    for {
+      waitUntilServerIsAvailable <- SmartPolicy.waitUntilServerIsAvailable
+      retryAfterSleepMillis      <- SmartPolicy.retryAfterSleepMillis
+
+      chosen       <- addressFactory.choose(waitUntilServerIsAvailable)
+      request      = addressFactory.build(chosen, req)
+      res          <- tryExecute(request).catchAll(_ => execute(req).delay(retryAfterSleepMillis.millis))
+      (code, body) = res
+      worthRetry   <- SmartPolicy.isWorthRetry(code, body)
+      out          <- if (worthRetry) execute(req).delay(retryAfterSleepMillis.millis) else ZIO.succeed(res)
+    } yield out
+
+  def tryExecute(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
+    val schedule: Schedule[Clock, Throwable, ((Int, Int), Throwable)] =
+      Schedule.spaced(1.second) && Schedule.recurs(3) && Schedule.doWhile[Throwable] {
         case _: SocketTimeoutException => {
           println("TEST Sock timeout")
           true
@@ -31,33 +42,10 @@ class SmartClient(addressFactory: AddressFactory) {
         case _ => false
       }
 
-      blocking.effectBlocking {
-        val res = r.asBytes
-        (res.code, res.body)
-      }.retry(schedule)
-    }
-
-    val response = for {
-      waitUntilServerIsAvailable <- SmartPolicy.waitUntilServerIsAvailable
-      retryAfterSleepMillis      <- SmartPolicy.retryAfterSleepMillis
-
-      chosen  <- addressFactory.choose(waitUntilServerIsAvailable)
-      request = addressFactory.build(chosen, req)
-      res     <- tryExecute(request)
-    } yield res
-
-    // TODO: 재시도 할 때 기존 주소 exclude - 2군데 수정, 재시도를 for 문 안으로 넣을수 있지 않을까?
-    ZIO.ifM(response.isSuccess)(
-      {
-        val d = for {
-          res          <- response
-          (code, body) = res
-          worthRetry   <- SmartPolicy.isWorthRetry(code, body)
-        } yield worthRetry
-        ZIO.ifM(d)(execute(req).delay(1.second), response)
-      },
-      execute(req).delay(1.second)
-    )
+    blocking.effectBlocking {
+      val res = r.asBytes
+      (res.code, res.body)
+    }.retry(schedule)
   }
 
 }
