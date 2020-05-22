@@ -12,7 +12,7 @@ object SmartClient {
   def create(
     url: String,
     periodSec: Long
-  ): ZIO[Clock with Has[AddressDiscover.Service], Nothing, SmartClient] =
+  ): ZIO[Clock with random.Random with Has[AddressDiscover.Service], Nothing, SmartClient] =
     for {
       factory <- AddressFactory.create(url, periodSec)
     } yield new SmartClient(factory)
@@ -29,21 +29,18 @@ class SmartClient(addressFactory: AddressFactory) {
       waitUntilServerIsAvailable <- RetryPolicy.waitUntilServerIsAvailable
       chosen                     <- addressFactory.choose(waitUntilServerIsAvailable)
       request                    = addressFactory.build(chosen, req)
-      retryAfterSleepMillis      <- RetryPolicy.retryAfterSleepMillis
-      res                        <- tryExecute(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMillis.millis))
+      retryAfterSleepMs          <- RetryPolicy.retryAfterSleepMs
+      res                        <- tryExecute(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis))
       (code, body)               = res
       worthRetry                 <- RetryPolicy.isWorthRetry(code, body)
-      result                     <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMillis.millis) else ZIO.succeed(res)
+      result                     <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis) else ZIO.succeed(res)
     } yield result
 
   def tryExecute(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
     val schedule: Schedule[Clock, Throwable, ((Int, Int), Throwable)] =
       Schedule.spaced(1.second) && Schedule.recurs(3) && Schedule.doWhile[Throwable] {
-        case _: SocketTimeoutException => {
-          println("TEST Sock timeout")
-          true
-        }
-        case _ => false
+        case _: SocketTimeoutException => true
+        case _                         => false
       }
 
     blocking.effectBlocking {
@@ -51,5 +48,4 @@ class SmartClient(addressFactory: AddressFactory) {
       (res.code, res.body)
     }.retry(schedule)
   }
-
 }

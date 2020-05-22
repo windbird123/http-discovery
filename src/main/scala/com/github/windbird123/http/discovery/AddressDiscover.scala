@@ -1,10 +1,12 @@
 package com.github.windbird123.http.discovery
 
+import scalaj.http.Http
 import zio._
 
 object AddressDiscover {
   trait Service {
-    def fetch(discoverUrl: String): Task[String]
+    // blocking.effectBlocking 으로 구현되면 좋으나 ZIO[Blocking, Throwable, String] 타입이 되어버림.
+    def fetch(discoverUrl: String): Task[String] = Task.effect(Http(discoverUrl).timeout(10000, 10000).asString.body)
     def parse(text: String): Task[Seq[String]]
   }
 
@@ -16,7 +18,7 @@ object AddressDiscover {
     new Service {
       override def fetch(discoverUrl: String): Task[String] = UIO("some url list")
 
-      override def parse(text: String): Task[Seq[String]] = UIO(Seq("http://date.jsontest.com"))
+      override def parse(text: String): Task[Seq[String]] = UIO(Seq("https://jsonplaceholder.typicode.com"))
     }
   )
 }
