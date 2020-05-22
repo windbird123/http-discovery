@@ -5,7 +5,7 @@ import zio._
 object RetryPolicy {
   trait Service {
     val waitUntilServerIsAvailable: Boolean                            = true
-    val retryAfterSleepMs: Long                                        = 1000L
+    val retryAfterSleepMs: Long                                        = 10000L // request 를 보낸 주소가 문제가 있는 것으로 판단될 경우, retryAfterSleepMs 후에 다른 주소로 재시도
     def isWorthRetry(statusCode: Int, body: Array[Byte]): UIO[Boolean] = UIO.succeed(false)
   }
 
