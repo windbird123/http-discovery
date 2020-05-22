@@ -28,19 +28,20 @@ class AddressFactory(ref: Ref[Seq[String]]) {
       _    <- ref.set(addr)
     } yield ()
 
-  def choose(
-    waitUntilServerIsAvailable: Boolean
-  ): ZIO[Clock, Throwable, String] = {
-    val randomOne = ref.get.map(addrs => Random.shuffle(addrs).headOption)
-
-    ZIO.ifM(randomOne.map(_.isEmpty && waitUntilServerIsAvailable))(
-      choose(waitUntilServerIsAvailable).delay(3.seconds),
-      randomOne.map {
-        case Some(x) => Right(x)
-        case None    => Left(new Exception("Any available address was not found"))
-      }.absolve
-    )
-  }
+  def choose(waitUntilServerIsAvailable: Boolean): ZIO[Clock, Throwable, String] =
+    for {
+      oneOpt <- ref.get.map(addrs => Random.shuffle(addrs).headOption)
+      one <- oneOpt match {
+              case Some(x) => ZIO.succeed(x)
+              case None =>
+                if (waitUntilServerIsAvailable) {
+                  // 사용할 주소가 하나도 없을 경우 5초 뒤에 다시 시도
+                  choose(waitUntilServerIsAvailable).delay(5.seconds)
+                } else {
+                  ZIO.fail(new Exception("Any available address was not found"))
+                }
+            }
+    } yield one
 
   def exclude(blacks: Seq[String]): UIO[Unit] = ref.update(x => x.filterNot(blacks.contains))
 
