@@ -20,8 +20,8 @@ object MainService {
 }
 
 object SampleApp extends zio.App {
-  override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, Int] = {
+  override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val layer = AddressDiscover.live ++ RetryPolicy.live
-    MainService.logic.tapError(x => UIO(x.printStackTrace())).fold(_ => 1, _ => 0).provideCustomLayer(layer)
+    MainService.logic.tapError(x => UIO(x.printStackTrace())).provideCustomLayer(layer).exitCode
   }
 }

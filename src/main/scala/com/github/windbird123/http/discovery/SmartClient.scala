@@ -30,13 +30,13 @@ class SmartClient(addressFactory: AddressFactory) {
       chosen                     <- addressFactory.choose(waitUntilServerIsAvailable)
       request                    = addressFactory.build(chosen, req)
       retryAfterSleepMs          <- RetryPolicy.retryAfterSleepMs
-      res                        <- tryExecute(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis))
+      res                        <- tryOnce(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis))
       (code, body)               = res
       worthRetry                 <- RetryPolicy.isWorthRetry(code, body)
       result                     <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis) else ZIO.succeed(res)
     } yield result
 
-  def tryExecute(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
+  def tryOnce(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
     val schedule: Schedule[Clock, Throwable, ((Int, Int), Throwable)] =
       Schedule.spaced(1.second) && Schedule.recurs(3) && Schedule.doWhile[Throwable] {
         case _: SocketTimeoutException => true
