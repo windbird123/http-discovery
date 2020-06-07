@@ -12,7 +12,7 @@ object MainService {
     AddressDiscover.Service
   ], Throwable, Unit] =
     for {
-      client       <- SmartClient.create(600L)
+      client       <- SmartClient.create()
       (code, body) <- client.execute(Http("/todos/1").timeout(2000, 2000))
       _            <- console.putStrLn(code.toString)
       _            <- console.putStrLn(new String(body, io.Codec.UTF8.name))
@@ -22,6 +22,6 @@ object MainService {
 object SmartClientTest extends zio.App {
   override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val layer = AddressDiscover.live ++ RetryPolicy.live
-    MainService.logic.tapError(x => UIO(x.printStackTrace())).provideCustomLayer(layer).exitCode
+    MainService.logic.provideCustomLayer(layer).exitCode
   }
 }

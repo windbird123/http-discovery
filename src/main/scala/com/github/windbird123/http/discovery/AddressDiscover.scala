@@ -13,6 +13,7 @@ object AddressDiscover {
 
   val live: Layer[Nothing, Has[Service]] = ZLayer.succeed(
     new Service {
+      override val periodSec: Long = 300L
       override def fetch(): Task[Seq[String]] =
         UIO(Seq("https://jsonplaceholder.typicode.com"))
     }

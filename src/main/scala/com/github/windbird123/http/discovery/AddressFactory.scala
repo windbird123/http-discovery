@@ -7,15 +7,18 @@ import zio.duration._
 import zio.random.Random
 
 class AddressFactory(ref: Ref[Seq[String]]) {
-  def update(
-    periodSec: Long = 300L
-  ): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, (Int, Int)] = {
-    val schedule = Schedule.spaced(periodSec.seconds).jittered && Schedule.forever
-    (for {
+  def fetchAndSet(): ZIO[Has[AddressDiscover.Service], Throwable, Unit] =
+    for {
       addr <- AddressDiscover.fetch()
       _    <- ref.set(addr)
-    } yield ()).repeat(schedule)
-  }
+    } yield ()
+
+  def update(): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, Unit] =
+    for {
+      period   <- AddressDiscover.periodSec
+      schedule = Schedule.spaced(period.seconds).jittered && Schedule.forever
+      _        <- fetchAndSet().repeat(schedule)
+    } yield ()
 
   def choose(waitUntilServerIsAvailable: Boolean): ZIO[Clock, Throwable, String] =
     for {
