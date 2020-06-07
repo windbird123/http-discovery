@@ -4,33 +4,24 @@ import scalaj.http.HttpRequest
 import zio._
 import zio.clock.Clock
 import zio.duration._
-
-import scala.util.Random
-
-object AddressFactory {
-  def create(
-    discoverUrl: String,
-    periodSec: Long = 300L
-  ): ZIO[Clock with random.Random with Has[AddressDiscover.Service], Nothing, AddressFactory] =
-    for {
-      ref      <- Ref.make(Seq.empty[String])
-      factory  = new AddressFactory(ref)
-      schedule = Schedule.spaced(periodSec.seconds).jittered && Schedule.forever
-      _        <- factory.update(discoverUrl).repeat(schedule).fork
-    } yield factory
-}
+import zio.random.Random
 
 class AddressFactory(ref: Ref[Seq[String]]) {
-  private def update(discoverUrl: String): ZIO[Has[AddressDiscover.Service], Throwable, Unit] =
-    for {
+  def update(
+    discoverUrl: String,
+    periodSec: Long = 300L
+  ): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, (Int, Int)] = {
+    val schedule = Schedule.spaced(periodSec.seconds).jittered && Schedule.forever
+    (for {
       text <- AddressDiscover.fetch(discoverUrl)
       addr <- AddressDiscover.parse(text)
       _    <- ref.set(addr)
-    } yield ()
+    } yield ()).repeat(schedule)
+  }
 
   def choose(waitUntilServerIsAvailable: Boolean): ZIO[Clock, Throwable, String] =
     for {
-      oneOpt <- ref.get.map(addrs => Random.shuffle(addrs).headOption)
+      oneOpt <- ref.get.map(addrs => scala.util.Random.shuffle(addrs).headOption)
       one <- oneOpt match {
               case Some(x) => ZIO.succeed(x)
               case None =>

@@ -7,14 +7,17 @@ import zio._
 import zio.blocking.Blocking
 import zio.clock.Clock
 import zio.duration._
+import zio.random.Random
 
 object SmartClient {
   def create(
-    url: String,
+    discoverUrl: String,
     periodSec: Long
-  ): ZIO[Clock with random.Random with Has[AddressDiscover.Service], Nothing, SmartClient] =
+  ): ZIO[Clock with Random with Has[AddressDiscover.Service], Nothing, SmartClient] =
     for {
-      factory <- AddressFactory.create(url, periodSec)
+      ref     <- Ref.make(Seq.empty[String])
+      factory = new AddressFactory(ref)
+      _       <- factory.update(discoverUrl, periodSec).fork // note fork
     } yield new SmartClient(factory)
 }
 
