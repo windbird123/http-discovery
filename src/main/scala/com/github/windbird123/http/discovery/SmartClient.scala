@@ -11,13 +11,12 @@ import zio.random.Random
 
 object SmartClient {
   def create(
-    discoverUrl: String,
     periodSec: Long
   ): ZIO[Clock with Random with Has[AddressDiscover.Service], Nothing, SmartClient] =
     for {
       ref     <- Ref.make(Seq.empty[String])
       factory = new AddressFactory(ref)
-      _       <- factory.update(discoverUrl, periodSec).fork // note fork
+      _       <- factory.update(periodSec).fork // note fork
     } yield new SmartClient(factory)
 }
 

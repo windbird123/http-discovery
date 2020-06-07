@@ -8,13 +8,11 @@ import zio.random.Random
 
 class AddressFactory(ref: Ref[Seq[String]]) {
   def update(
-    discoverUrl: String,
     periodSec: Long = 300L
   ): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, (Int, Int)] = {
     val schedule = Schedule.spaced(periodSec.seconds).jittered && Schedule.forever
     (for {
-      text <- AddressDiscover.fetch(discoverUrl)
-      addr <- AddressDiscover.parse(text)
+      addr <- AddressDiscover.fetch()
       _    <- ref.set(addr)
     } yield ()).repeat(schedule)
   }
