@@ -1,2 +1,2 @@
 # http-discovery
-http request using discovery service
+client side http load balancer via discovery service

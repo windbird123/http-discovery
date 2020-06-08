@@ -10,10 +10,10 @@ object BlockingSmartClient {
   def create(addressDiscover: AddressDiscover.Service): BlockingSmartClient = {
     val layer = ZLayer.succeed(addressDiscover)
     val factory: AddressFactory = runtime.unsafeRun(for {
-      ref     <- Ref.make(Seq.empty[String])
-      factory = new AddressFactory(ref)
-      _       <- factory.fetchAndSet().provideCustomLayer(layer) // 최초 한번 빠르게 주소를 읽어 초기화 함
-    } yield factory)
+      ref <- Ref.make(Seq.empty[String])
+      fac = new AddressFactory(ref)
+      _   <- fac.fetchAndSet().provideCustomLayer(layer) // 최초 한번 빠르게 주소를 읽어 초기화 함
+    } yield fac)
 
     runtime.unsafeRunToFuture(
       factory.update().delay(1.seconds).provideCustomLayer(layer) // 1초 뒤에 scheduling 등록

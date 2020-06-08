@@ -34,7 +34,7 @@ class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
       maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
       res <- tryOnce(request, maxRetryNumberWhenTimeout).catchSome {
               case _: SocketException => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
-              case t: Throwable       => ZIO.fail(t)
+              case t: Throwable       => ZIO.fail(t)  // SocketTimeoutException 은 여기에 해당함
             }
       (code, body) = res
       worthRetry   <- RetryPolicy.isWorthRetryToAnotherAddress(code, body)
