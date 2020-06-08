@@ -1,6 +1,6 @@
 package com.github.windbird123.http.discovery
 
-import java.net.SocketTimeoutException
+import java.net.{SocketException, SocketTimeoutException}
 
 import com.typesafe.scalalogging.LazyLogging
 import scalaj.http.HttpRequest
@@ -33,9 +33,8 @@ class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
       retryToAnotherAddressAfterSleepMs <- RetryPolicy.retryToAnotherAddressAfterSleepMs
       maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
       res <- tryOnce(request, maxRetryNumberWhenTimeout).catchSome {
-              // tryOnce 에서 5번이나 시도했는데 SocketTimeoutException 으로 마무리 되었다면, code=-1 로 리턴
-              case _: SocketTimeoutException => ZIO.succeed((-1, Array.empty[Byte]))
-              case _                         => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+              case _: SocketException => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+              case t: Throwable       => ZIO.fail(t)
             }
       (code, body) = res
       worthRetry   <- RetryPolicy.isWorthRetryToAnotherAddress(code, body)
@@ -50,11 +49,11 @@ class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
     val schedule: Schedule[Clock, Throwable, ((Duration, Int), Throwable)] = {
       Schedule.exponential(1.second) && Schedule.recurs(maxRetryNumberWhenTimeout) && Schedule.doWhile[Throwable] {
         case e: SocketTimeoutException => {
-          logger.info(s"Retry, cause=[${e.getMessage}]")
+          logger.info(s"Retry, url=[${r.url}] cause=[${e.getMessage}]")
           true
         }
         case t: Throwable => {
-          logger.info(s"Fail, cause=[${t.getMessage}]")
+          logger.info(s"Fail, url=[${r.url}]", t)
           false
         }
       }

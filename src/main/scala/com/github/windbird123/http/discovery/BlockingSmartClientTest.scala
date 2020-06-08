@@ -3,6 +3,8 @@ package com.github.windbird123.http.discovery
 import scalaj.http.Http
 import zio.{Task, UIO}
 
+import scala.util.{Failure, Success, Try}
+
 object BlockingSmartClientTest {
   def main(args: Array[String]): Unit = {
     val addressDiscover = new AddressDiscover.Service {
@@ -18,9 +20,18 @@ object BlockingSmartClientTest {
       override def isWorthRetryToAnotherAddress(code: Int, body: Array[Byte]): UIO[Boolean] = UIO.succeed(false)
     }
 
-    val client       = BlockingSmartClient.create(addressDiscover)
-    val (code, body) = client.execute(Http("/todos/1").timeout(2000, 2000), retryPolicy)
-    println(code)
-    println(new String(body, io.Codec.UTF8.name))
+    val client = BlockingSmartClient.create(addressDiscover)
+    val response = Try {
+      client.execute(Http("/todos/1").timeout(2000, 2000), retryPolicy)
+    }
+
+    response match {
+      case Success(value) =>
+        val (code, body) = value
+        println(code)
+        println(new String(body, io.Codec.UTF8.name))
+      case Failure(e) =>
+        e.printStackTrace()
+    }
   }
 }
