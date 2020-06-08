@@ -2,6 +2,7 @@ package com.github.windbird123.http.discovery
 
 import java.net.SocketTimeoutException
 
+import com.typesafe.scalalogging.LazyLogging
 import scalaj.http.HttpRequest
 import zio._
 import zio.blocking.Blocking
@@ -18,30 +19,46 @@ object SmartClient {
     } yield new SmartClient(factory)
 }
 
-class SmartClient(addressFactory: AddressFactory) {
+class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
   def execute(
     req: HttpRequest,
     blackAddresses: UIO[Seq[String]] = UIO(Seq.empty)
   ): ZIO[Blocking with Clock with Has[RetryPolicy.Service], Throwable, (Int, Array[Byte])] =
     for {
-      blacks                     <- blackAddresses
-      _                          <- addressFactory.exclude(blacks)
-      waitUntilServerIsAvailable <- RetryPolicy.waitUntilServerIsAvailable
-      chosen                     <- addressFactory.choose(waitUntilServerIsAvailable)
-      request                    = addressFactory.build(chosen, req)
-      retryAfterSleepMs          <- RetryPolicy.retryAfterSleepMs
-      res                        <- tryOnce(request).catchAll(_ => execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis))
-      (code, body)               = res
-      worthRetry                 <- RetryPolicy.isWorthRetry(code, body)
-      result                     <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryAfterSleepMs.millis) else ZIO.succeed(res)
+      blacks                            <- blackAddresses
+      _                                 <- addressFactory.exclude(blacks)
+      waitUntilServerIsAvailable        <- RetryPolicy.waitUntilServerIsAvailable
+      chosen                            <- addressFactory.choose(waitUntilServerIsAvailable)
+      request                           = addressFactory.build(chosen, req)
+      retryToAnotherAddressAfterSleepMs <- RetryPolicy.retryToAnotherAddressAfterSleepMs
+      maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
+      res <- tryOnce(request, maxRetryNumberWhenTimeout).catchSome {
+              // tryOnce 에서 5번이나 시도했는데 SocketTimeoutException 으로 마무리 되었다면, code=-1 로 리턴
+              case _: SocketTimeoutException => ZIO.succeed((-1, Array.empty[Byte]))
+              case _                         => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+            }
+      (code, body) = res
+      worthRetry   <- RetryPolicy.isWorthRetryToAnotherAddress(code, body)
+      result <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+               else ZIO.succeed(res)
     } yield result
 
-  def tryOnce(r: HttpRequest): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
-    val schedule: Schedule[Clock, Throwable, ((Int, Int), Throwable)] =
-      Schedule.spaced(1.second) && Schedule.recurs(3) && Schedule.doWhile[Throwable] {
-        case _: SocketTimeoutException => true
-        case _                         => false
+  def tryOnce(
+    r: HttpRequest,
+    maxRetryNumberWhenTimeout: Int
+  ): ZIO[Clock with Blocking, Throwable, (Int, Array[Byte])] = {
+    val schedule: Schedule[Clock, Throwable, ((Duration, Int), Throwable)] = {
+      Schedule.exponential(1.second) && Schedule.recurs(maxRetryNumberWhenTimeout) && Schedule.doWhile[Throwable] {
+        case e: SocketTimeoutException => {
+          logger.info(s"Retry, cause=[${e.getMessage}]")
+          true
+        }
+        case t: Throwable => {
+          logger.info(s"Fail, cause=[${t.getMessage}]")
+          false
+        }
       }
+    }
 
     blocking.effectBlocking {
       val res = r.asBytes

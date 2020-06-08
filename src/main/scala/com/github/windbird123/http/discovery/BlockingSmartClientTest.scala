@@ -12,9 +12,10 @@ object BlockingSmartClientTest {
     }
 
     val retryPolicy = new RetryPolicy.Service {
-      override val waitUntilServerIsAvailable: Boolean                            = true
-      override val retryAfterSleepMs: Long                                        = 10000L
-      override def isWorthRetry(statusCode: Int, body: Array[Byte]): UIO[Boolean] = UIO.succeed(false)
+      override val waitUntilServerIsAvailable: Boolean                                      = true
+      override val maxRetryNumberWhenTimeout: Int                                           = 5
+      override val retryToAnotherAddressAfterSleepMs: Long                                  = 10000L
+      override def isWorthRetryToAnotherAddress(code: Int, body: Array[Byte]): UIO[Boolean] = UIO.succeed(false)
     }
 
     val client       = BlockingSmartClient.create(addressDiscover)
