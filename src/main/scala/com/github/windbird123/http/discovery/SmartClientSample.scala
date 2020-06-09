@@ -20,7 +20,7 @@ object MainService {
     } yield ()
 }
 
-object SmartClientTest extends zio.App {
+object SmartClientSample extends zio.App {
   override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
     val layer = AddressDiscover.live ++ RetryPolicy.live ++ HttpAction.live
     MainService.logic.provideCustomLayer(layer).exitCode

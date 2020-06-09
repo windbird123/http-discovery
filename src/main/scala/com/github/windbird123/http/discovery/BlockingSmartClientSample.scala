@@ -5,7 +5,7 @@ import zio.{Task, UIO}
 
 import scala.util.{Failure, Success, Try}
 
-object BlockingSmartClientTest {
+object BlockingSmartClientSample {
   def main(args: Array[String]): Unit = {
     val addressDiscover = new AddressDiscover.Service {
       override val periodSec: Long = 300L
