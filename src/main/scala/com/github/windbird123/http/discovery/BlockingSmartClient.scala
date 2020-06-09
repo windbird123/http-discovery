@@ -29,5 +29,6 @@ class BlockingSmartClient(addressFactory: AddressFactory) {
   def execute(
     req: HttpRequest,
     retryPolicy: RetryPolicy.Service
-  ): (Int, Array[Byte]) = runtime.unsafeRun(smartClient.execute(req).provideCustomLayer(ZLayer.succeed(retryPolicy)))
+  ): (Int, Array[Byte]) =
+    runtime.unsafeRun(smartClient.execute(req).provideCustomLayer(ZLayer.succeed(retryPolicy) ++ HttpAction.live))
 }
