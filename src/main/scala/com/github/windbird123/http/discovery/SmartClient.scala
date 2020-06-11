@@ -11,11 +11,12 @@ import zio.duration._
 import zio.random.Random
 
 object SmartClient {
-  def create(): ZIO[Clock with Blocking with Random with Has[AddressDiscover.Service], Nothing, SmartClient] =
+  def create(): ZIO[Clock with Blocking with Random with Has[AddressDiscover.Service], Throwable, SmartClient] =
     for {
       ref     <- Ref.make(Seq.empty[String])
       factory = new AddressFactory(ref)
-      _       <- factory.update().fork // note fork
+      _       <- factory.fetchAndSet() // 최초 한번은 바로 읽어 초기화
+      _       <- factory.scheduleUpdate().fork // note fork
     } yield new SmartClient(factory)
 }
 
@@ -34,7 +35,7 @@ class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
       maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
       res <- HttpAction.tryExecute(request, maxRetryNumberWhenTimeout).catchSome {
               case _: SocketException => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
-              case t: Throwable       => ZIO.fail(t) // SocketTimeoutException 은 여기에 해당함
+              case t: Throwable       => ZIO.fail(t) // n 번 SocketTimeoutException 은 여기에 해당하며, client request 에 문제가 있는 것으로 봄
             }
       (code, body) = res
       worthRetry   <- RetryPolicy.isWorthRetryToAnotherAddress(code, body)

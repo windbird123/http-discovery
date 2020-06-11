@@ -15,7 +15,7 @@ class AddressFactory(ref: Ref[Seq[String]]) extends LazyLogging {
       _    <- Task(logger.info(s"Base addresses are updated, addresses=[${addr.mkString(",")}]"))
     } yield ()
 
-  def update(): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, Unit] =
+  def scheduleUpdate(): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, Unit] =
     for {
       period      <- AddressDiscover.periodSec
       schedule    = Schedule.spaced(period.seconds) && Schedule.forever
