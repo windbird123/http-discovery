@@ -17,9 +17,10 @@ class AddressFactory(ref: Ref[Seq[String]]) extends LazyLogging {
 
   def update(): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, Unit] =
     for {
-      period   <- AddressDiscover.periodSec
-      schedule = Schedule.spaced(period.seconds).jittered && Schedule.forever
-      _        <- fetchAndSet().repeat(schedule)
+      period      <- AddressDiscover.periodSec
+      schedule    = Schedule.spaced(period.seconds) && Schedule.forever
+      delayFactor <- random.nextDouble
+      _           <- fetchAndSet().repeat(schedule).delay((delayFactor * period).toLong.seconds)
     } yield ()
 
   def choose(waitUntilServerIsAvailable: Boolean): ZIO[Clock, Throwable, String] =
