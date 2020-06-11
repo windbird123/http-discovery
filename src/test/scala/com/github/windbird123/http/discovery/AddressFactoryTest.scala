@@ -13,10 +13,10 @@ object AddressFactoryTest extends DefaultRunnableSpec {
   val chooseSuite = suite("choose")(
     testM("ref element 개수가 1개 일때, 해당 element 가 선택되어야 한다.") {
       for {
-        ref     <- Ref.make(Seq("abc"))
+        ref     <- Ref.make(Seq("http://a.b.c"))
         factory = new AddressFactory(ref)
         one     <- factory.choose(false)
-      } yield assert(one)(equalTo("abc"))
+      } yield assert(one)(equalTo("http://a.b.c"))
     },
     testM("ref element 개수가 0 개이고 waitUntilServerIsAvailable=false 일 때, fail 되어야 한다.") {
       for {
@@ -30,10 +30,10 @@ object AddressFactoryTest extends DefaultRunnableSpec {
         ref     <- Ref.make(Seq.empty[String])
         factory = new AddressFactory(ref)
         oneFork <- factory.choose(true).fork
-        _       <- ref.set(Seq("abc")).delay(2.seconds).fork
+        _       <- ref.set(Seq("http://a.b.c")).delay(2.seconds).fork
         _       <- TestClock.adjust(6.seconds)
         one     <- oneFork.join
-      } yield assert(one)(equalTo("abc"))
+      } yield assert(one)(equalTo("http://a.b.c"))
     }
   )
 }
