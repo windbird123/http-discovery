@@ -46,7 +46,6 @@ object SmartClientTest extends DefaultRunnableSpec {
         val n                        = new AtomicInteger(0)
         override val periodSec: Long = 1
         override def fetch(): Task[Seq[String]] = {
-          println("called")
           if (n.addAndGet(1) < 3) Task.succeed(Seq.empty[String]) else Task.succeed(Seq("http://a.b.c"))
         }
       })
@@ -58,12 +57,10 @@ object SmartClientTest extends DefaultRunnableSpec {
       val layer = retryPolicy ++ addressDiscover ++ successHttpActionLayer
 
       val scn = for {
-        client <- SmartClient.create()
-        res    <- client.execute(Http("/some/path"))
-        _      <- TestClock.adjust(2.seconds)
-        _      <- TestClock.adjust(4.seconds)
-        _      <- TestClock.adjust(6.seconds)
-        _      <- TestClock.adjust(8.seconds)
+        client  <- SmartClient.create()
+        resFork <- client.execute(Http("/some/path")).fork
+        _       <- TestClock.adjust(10.seconds)
+        res     <- resFork.join
       } yield res
 
       for {
