@@ -8,12 +8,11 @@ import zio.console.Console
 import zio.random.Random
 
 object MainService {
-  val logic
-    : ZIO[Console with Blocking with Clock with Has[RetryPolicy.Service] with Has[HttpAction.Service] with Random with Has[
-      AddressDiscover.Service
-    ], Throwable, Unit] =
+  val logic: ZIO[Console with Blocking with Clock with Has[RetryPolicy.Service] with Random with Has[
+    AddressDiscover.Service
+  ], Throwable, Unit] =
     for {
-      client       <- SmartClient.create()
+      client       <- SmartClient.create(DefaultHttpAction)
       (code, body) <- client.execute(Http("/todos/1").timeout(2000, 2000))
       _            <- console.putStrLn(code.toString)
       _            <- console.putStrLn(new String(body, io.Codec.UTF8.name))
@@ -22,7 +21,7 @@ object MainService {
 
 object SmartClientSample extends zio.App {
   override def run(args: List[String]): ZIO[zio.ZEnv, Nothing, ExitCode] = {
-    val layer = AddressDiscover.live ++ RetryPolicy.live ++ HttpAction.live
+    val layer = AddressDiscover.live ++ RetryPolicy.live
     MainService.logic.provideCustomLayer(layer).exitCode
   }
 }

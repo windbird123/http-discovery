@@ -11,20 +11,22 @@ import zio.duration._
 import zio.random.Random
 
 object SmartClient {
-  def create(): ZIO[Clock with Blocking with Random with Has[AddressDiscover.Service], Throwable, SmartClient] =
+  def create(
+    httpAction: HttpAction
+  ): ZIO[Clock with Blocking with Random with Has[AddressDiscover.Service], Throwable, SmartClient] =
     for {
       ref     <- Ref.make(Seq.empty[String])
       factory = new AddressFactory(ref)
       _       <- factory.fetchAndSet() // 최초 한번은 바로 읽어 초기화
       _       <- factory.scheduleUpdate().fork // note fork
-    } yield new SmartClient(factory)
+    } yield new SmartClient(factory, httpAction)
 }
 
-class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
+class SmartClient(addressFactory: AddressFactory, httpAction: HttpAction = DefaultHttpAction) extends LazyLogging {
   def execute(
     req: HttpRequest,
     blackAddresses: UIO[Seq[String]] = UIO(Seq.empty)
-  ): ZIO[Blocking with Clock with Has[RetryPolicy.Service] with Has[HttpAction.Service], Throwable, (Int, Array[Byte])] =
+  ): ZIO[Blocking with Clock with Has[RetryPolicy.Service], Throwable, (Int, Array[Byte])] =
     for {
       blacks                            <- blackAddresses
       _                                 <- addressFactory.exclude(blacks)
@@ -33,7 +35,7 @@ class SmartClient(addressFactory: AddressFactory) extends LazyLogging {
       request                           = addressFactory.build(chosen, req)
       retryToAnotherAddressAfterSleepMs <- RetryPolicy.retryToAnotherAddressAfterSleepMs
       maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
-      res <- HttpAction.tryExecute(request, maxRetryNumberWhenTimeout).catchSome {
+      res <- httpAction.tryExecute(request, maxRetryNumberWhenTimeout).catchSome {
               case _: SocketException => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
               case t: Throwable       => ZIO.fail(t) // n 번 SocketTimeoutException 은 여기에 해당하며, client request 에 문제가 있는 것으로 봄
             }

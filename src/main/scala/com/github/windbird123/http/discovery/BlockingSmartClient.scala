@@ -30,5 +30,5 @@ class BlockingSmartClient(addressFactory: AddressFactory) {
     req: HttpRequest,
     retryPolicy: RetryPolicy.Service
   ): (Int, Array[Byte]) =
-    runtime.unsafeRun(smartClient.execute(req).provideCustomLayer(ZLayer.succeed(retryPolicy) ++ HttpAction.live))
+    runtime.unsafeRun(smartClient.execute(req).provideCustomLayer(ZLayer.succeed(retryPolicy)))
 }

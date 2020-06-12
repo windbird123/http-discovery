@@ -16,10 +16,10 @@ import zio.test.{DefaultRunnableSpec, ZSpec, _}
 object SmartClientTest extends DefaultRunnableSpec {
   override def spec: ZSpec[_root_.zio.test.environment.TestEnvironment, Any] = suite("SmartClient Test")(executeSuite)
 
-  val successHttpActionLayer: Layer[Nothing, Has[HttpAction.Service]] = ZLayer.succeed(new HttpAction.Service {
+  val successHttpAction: HttpAction = new HttpAction {
     override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
       Task.succeed((200, "success".getBytes(io.Codec.UTF8.name)))
-  })
+  }
 
   val executeSuite = suite("execute")(
     testM("waitUntilServerIsAvailable=false 이고 사용 가능한 주소가 없을때 fail 되어야 한다.") {
@@ -31,10 +31,10 @@ object SmartClientTest extends DefaultRunnableSpec {
         override val waitUntilServerIsAvailable: Boolean = false
       })
 
-      val layer = retryPolicy ++ addressDiscover ++ successHttpActionLayer
+      val layer = retryPolicy ++ addressDiscover
 
       val scn = for {
-        client <- SmartClient.create()
+        client <- SmartClient.create(successHttpAction)
         failed <- client.execute(Http("/some/path")).flip
       } yield failed
 
@@ -55,10 +55,10 @@ object SmartClientTest extends DefaultRunnableSpec {
         override val waitUntilServerIsAvailable: Boolean     = true
       })
 
-      val layer = retryPolicy ++ addressDiscover ++ successHttpActionLayer
+      val layer = retryPolicy ++ addressDiscover
 
       val scn = for {
-        client  <- SmartClient.create()
+        client  <- SmartClient.create(successHttpAction)
         resFork <- client.execute(Http("/some/path")).fork
         _       <- TestClock.adjust(5.seconds)
         res     <- resFork.join
@@ -92,18 +92,18 @@ object SmartClientTest extends DefaultRunnableSpec {
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
       })
 
-      val httpAction = ZLayer.succeed(new HttpAction.Service {
+      val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
           r.url match {
             case s if s.startsWith("http://good") => ZIO.succeed((200, "success".getBytes(io.Codec.UTF8.name)))
             case _                                => ZIO.fail(new SocketException("bad"))
           }
-      })
+      }
 
-      val layer = retryPolicy ++ addressDiscover ++ httpAction
+      val layer = retryPolicy ++ addressDiscover
 
       val scn = for {
-        client  <- SmartClient.create()
+        client  <- SmartClient.create(httpAction)
         resFork <- client.execute(Http("/some/path")).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
@@ -123,15 +123,15 @@ object SmartClientTest extends DefaultRunnableSpec {
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
       })
 
-      val httpAction = ZLayer.succeed(new HttpAction.Service {
+      val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
           ZIO.fail(new SocketTimeoutException())
-      })
+      }
 
-      val layer = retryPolicy ++ addressDiscover ++ httpAction
+      val layer = retryPolicy ++ addressDiscover
 
       val scn = for {
-        client  <- SmartClient.create()
+        client  <- SmartClient.create(httpAction)
         resFork <- client.execute(Http("/some/path")).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
@@ -167,18 +167,18 @@ object SmartClientTest extends DefaultRunnableSpec {
           if (code == 503) UIO(true) else UIO(false)
       })
 
-      val httpAction = ZLayer.succeed(new HttpAction.Service {
+      val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
           r.url match {
             case s if s.startsWith("http://good") => ZIO.succeed((200, "success".getBytes(io.Codec.UTF8.name)))
             case _                                => ZIO.succeed((503, Array.empty[Byte]))
           }
-      })
+      }
 
-      val layer = retryPolicy ++ addressDiscover ++ httpAction
+      val layer = retryPolicy ++ addressDiscover
 
       val scn = for {
-        client  <- SmartClient.create()
+        client  <- SmartClient.create(httpAction)
         resFork <- client.execute(Http("/some/path")).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
