@@ -5,7 +5,7 @@ import zio._
 object AddressDiscover {
   trait Service {
     val periodSec: Long = 300L
-    def fetch(): Task[Seq[String]]
+    def fetch(configString: String = ""): Task[Seq[String]]
   }
 
   def periodSec: ZIO[Has[Service], Nothing, Long]        = ZIO.access(_.get[Service].periodSec)
@@ -14,7 +14,7 @@ object AddressDiscover {
   val live: Layer[Nothing, Has[Service]] = ZLayer.succeed(
     new Service {
       override val periodSec: Long = 300L
-      override def fetch(): Task[Seq[String]] =
+      override def fetch(configString: String): Task[Seq[String]] =
         UIO(Seq("https://jsonplaceholder.typicode.com"))
     }
   )

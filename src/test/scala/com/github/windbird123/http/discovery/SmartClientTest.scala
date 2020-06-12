@@ -24,7 +24,7 @@ object SmartClientTest extends DefaultRunnableSpec {
   val executeSuite = suite("execute")(
     testM("waitUntilServerIsAvailable=false 이고 사용 가능한 주소가 없을때 fail 되어야 한다.") {
       val addressDiscover: Layer[Nothing, Has[AddressDiscover.Service]] = ZLayer.succeed(new AddressDiscover.Service {
-        override def fetch(): Task[Seq[String]] = Task.succeed(Seq.empty[String])
+        override def fetch(configString: String): Task[Seq[String]] = Task.succeed(Seq.empty[String])
       })
 
       val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
@@ -46,7 +46,7 @@ object SmartClientTest extends DefaultRunnableSpec {
       val addressDiscover: Layer[Nothing, Has[AddressDiscover.Service]] = ZLayer.succeed(new AddressDiscover.Service {
         val tryCount                 = new AtomicInteger(0)
         override val periodSec: Long = 1
-        override def fetch(): Task[Seq[String]] =
+        override def fetch(configString: String): Task[Seq[String]] =
           if (tryCount.getAndIncrement() < 3) Task.succeed(Seq.empty[String]) else Task.succeed(Seq("http://a.b.c"))
       })
 
@@ -70,7 +70,7 @@ object SmartClientTest extends DefaultRunnableSpec {
     },
     testM("SocketException 을 발생시키는 bad address 가 있으면, 이를 제거해 나가면서 request 를 시도한다.") {
       val addressDiscover: Layer[Nothing, Has[AddressDiscover.Service]] = ZLayer.succeed(new AddressDiscover.Service {
-        override def fetch(): Task[Seq[String]] =
+        override def fetch(configString: String): Task[Seq[String]] =
           Task.succeed(
             Seq(
               "http://bad1",
@@ -115,7 +115,7 @@ object SmartClientTest extends DefaultRunnableSpec {
     },
     testM("HttpAction 의 tryExecute 의 최종 결과가 SocketTimeoutException 일 경우, request 문제로 보고 fail 되어야 한다.") {
       val addressDiscover: Layer[Nothing, Has[AddressDiscover.Service]] = ZLayer.succeed(new AddressDiscover.Service {
-        override def fetch(): Task[Seq[String]] = Task.succeed(Seq("http://a.b.c"))
+        override def fetch(configString: String): Task[Seq[String]] = Task.succeed(Seq("http://a.b.c"))
       })
 
       val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
@@ -143,7 +143,7 @@ object SmartClientTest extends DefaultRunnableSpec {
     },
     testM("isWorthRetryToAnotherAddress 에서 설정된 정책대로 retry 가 잘 수행되어야 한다.") {
       val addressDiscover: Layer[Nothing, Has[AddressDiscover.Service]] = ZLayer.succeed(new AddressDiscover.Service {
-        override def fetch(): Task[Seq[String]] =
+        override def fetch(configString: String): Task[Seq[String]] =
           Task.succeed(
             Seq(
               "http://bad1",
