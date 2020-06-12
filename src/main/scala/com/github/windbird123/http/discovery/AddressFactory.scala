@@ -46,7 +46,7 @@ class AddressFactory(ref: Ref[Seq[String]]) extends LazyLogging {
     } yield one
 
   def exclude(blacks: Seq[String]): UIO[Unit] = {
-    logger.info(s"Base addresses=[${blacks.mkString(",")}] are excluded")
+    logger.info(s"Abnormal addresses=[${blacks.mkString(",")}] are excluded")
     ref.update(x => x.filterNot(blacks.contains))
   }
 
