@@ -34,7 +34,7 @@ object SmartClientTest extends DefaultRunnableSpec {
       } yield assert(failed)(isSubtype[Throwable](anything))
     },
     /**
-     * 주의: fetch() 를 구현할때 아래와 같은 형태로 구현하면 안된다.
+     * 주의: AddressDiscover.fetch() 를 구현할때 아래와 같은 형태로 구현하면 안된다.
      *   if (..) Task(..) else Task(..)
      * ZIO schedule 은 effect 만을 주기적으로 수행한다 !!!
      */
@@ -164,5 +164,7 @@ object SmartClientTest extends DefaultRunnableSpec {
         res     <- resFork.join
       } yield assert(res._1)(equalTo(200)) && assert(res._2)(equalTo("success".getBytes(io.Codec.UTF8.name)))
     }
+
+    // testM("AddresDiscover.fetch() 가 실패하면, 기존 주소 그대로 유지되어야 한다.")
   )
 }
