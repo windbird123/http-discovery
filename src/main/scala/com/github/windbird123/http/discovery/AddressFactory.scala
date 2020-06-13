@@ -7,19 +7,19 @@ import zio.clock.Clock
 import zio.duration._
 import zio.random.Random
 
-class AddressFactory(ref: Ref[Seq[String]]) extends LazyLogging {
-  def fetchAndSet(): ZIO[Has[AddressDiscover.Service], Throwable, Unit] =
+class AddressFactory(ref: Ref[Seq[String]], addressDiscover: AddressDiscover) extends LazyLogging {
+  def fetchAndSet(): Task[Unit] =
     for {
-      addr <- AddressDiscover.fetch()
+      addr <- addressDiscover.fetch()
       _    <- ref.set(addr)
       _    <- Task(logger.info(s"Base addresses are updated, addresses=[${addr.mkString(",")}]"))
     } yield ()
 
-  def scheduleUpdate(): ZIO[Clock with Random with Has[AddressDiscover.Service], Throwable, Unit] =
+  def scheduleUpdate(): ZIO[Clock with Random, Throwable, Unit] =
     for {
-      period      <- AddressDiscover.periodSec
-      schedule    = Schedule.spaced(period.seconds) && Schedule.forever
       delayFactor <- random.nextDouble
+      period      = addressDiscover.periodSec
+      schedule    = Schedule.spaced(period.seconds) && Schedule.forever
       _           <- fetchAndSet().repeat(schedule).delay((delayFactor * period).toLong.seconds)
     } yield ()
 
@@ -45,10 +45,10 @@ class AddressFactory(ref: Ref[Seq[String]]) extends LazyLogging {
             }
     } yield one
 
-  def exclude(blacks: Seq[String]): UIO[Unit] = {
-    logger.info(s"Abnormal addresses=[${blacks.mkString(",")}] are excluded")
-    ref.update(x => x.filterNot(blacks.contains))
-  }
+  def exclude(blacks: Seq[String]): UIO[Unit] =
+    UIO(logger.info(s"Abnormal addresses=[${blacks.mkString(",")}] are excluded")) *> ref.update(x =>
+      x.filterNot(blacks.contains)
+    )
 
   def build(chosenBase: String, r: HttpRequest): HttpRequest = r.copy(url = chosenBase + r.url)
 }

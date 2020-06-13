@@ -12,11 +12,12 @@ import zio.random.Random
 
 object SmartClient {
   def create(
+    addressDiscover: AddressDiscover,
     httpAction: HttpAction
-  ): ZIO[Clock with Blocking with Random with Has[AddressDiscover.Service], Throwable, SmartClient] =
+  ): ZIO[Clock with Blocking with Random, Throwable, SmartClient] =
     for {
       ref     <- Ref.make(Seq.empty[String])
-      factory = new AddressFactory(ref)
+      factory = new AddressFactory(ref, addressDiscover)
       _       <- factory.fetchAndSet() // 최초 한번은 바로 읽어 초기화
       _       <- factory.scheduleUpdate().fork // note fork
     } yield new SmartClient(factory, httpAction)

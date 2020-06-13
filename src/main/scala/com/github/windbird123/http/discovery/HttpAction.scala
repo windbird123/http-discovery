@@ -14,7 +14,7 @@ trait HttpAction {
 
 object DefaultHttpAction extends HttpAction with LazyLogging {
   override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] = {
-    val schedule: Schedule[Clock, Throwable, ((Duration, Int), Throwable)] = {
+    lazy val schedule: Schedule[Clock, Throwable, ((Duration, Int), Throwable)] = {
       Schedule.exponential(1.second) && Schedule.recurs(maxRetryNumberWhenTimeout) && Schedule.doWhile[Throwable] {
         case e: SocketTimeoutException => {
           logger.info(s"Retry, url=[${r.url}] cause=[${e.getMessage}]")
