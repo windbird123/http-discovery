@@ -27,15 +27,15 @@ object SmartClientTest extends DefaultRunnableSpec {
         override def fetch(configString: String): Task[Seq[String]] = Task.succeed(Seq.empty[String])
       })
 
-      val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
+      val retryPolicy = new RetryPolicy {
         override val waitUntilServerIsAvailable: Boolean = false
-      })
+      }
 
-      val layer = retryPolicy ++ addressDiscover
+      val layer = addressDiscover
 
       val scn = for {
         client <- SmartClient.create(successHttpAction)
-        failed <- client.execute(Http("/some/path")).flip
+        failed <- client.execute(Http("/some/path"), retryPolicy).flip
       } yield failed
 
       for {
@@ -50,16 +50,16 @@ object SmartClientTest extends DefaultRunnableSpec {
           if (tryCount.getAndIncrement() < 3) Task.succeed(Seq.empty[String]) else Task.succeed(Seq("http://a.b.c"))
       })
 
-      val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
+      val retryPolicy = new RetryPolicy {
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
         override val waitUntilServerIsAvailable: Boolean     = true
-      })
+      }
 
-      val layer = retryPolicy ++ addressDiscover
+      val layer = addressDiscover
 
       val scn = for {
         client  <- SmartClient.create(successHttpAction)
-        resFork <- client.execute(Http("/some/path")).fork
+        resFork <- client.execute(Http("/some/path"), retryPolicy).fork
         _       <- TestClock.adjust(5.seconds)
         res     <- resFork.join
       } yield res
@@ -87,10 +87,10 @@ object SmartClientTest extends DefaultRunnableSpec {
           )
       })
 
-      val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
+      val retryPolicy = new RetryPolicy {
         override val maxRetryNumberWhenTimeout: Int          = 1
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
-      })
+      }
 
       val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
@@ -100,11 +100,11 @@ object SmartClientTest extends DefaultRunnableSpec {
           }
       }
 
-      val layer = retryPolicy ++ addressDiscover
+      val layer = addressDiscover
 
       val scn = for {
         client  <- SmartClient.create(httpAction)
-        resFork <- client.execute(Http("/some/path")).fork
+        resFork <- client.execute(Http("/some/path"), retryPolicy).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
       } yield res
@@ -118,21 +118,21 @@ object SmartClientTest extends DefaultRunnableSpec {
         override def fetch(configString: String): Task[Seq[String]] = Task.succeed(Seq("http://a.b.c"))
       })
 
-      val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
+      val retryPolicy = new RetryPolicy {
         override val maxRetryNumberWhenTimeout: Int          = 5
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
-      })
+      }
 
       val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
           ZIO.fail(new SocketTimeoutException())
       }
 
-      val layer = retryPolicy ++ addressDiscover
+      val layer = addressDiscover
 
       val scn = for {
         client  <- SmartClient.create(httpAction)
-        resFork <- client.execute(Http("/some/path")).fork
+        resFork <- client.execute(Http("/some/path"), retryPolicy).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
       } yield res
@@ -160,12 +160,12 @@ object SmartClientTest extends DefaultRunnableSpec {
           )
       })
 
-      val retryPolicy: Layer[Nothing, Has[RetryPolicy.Service]] = ZLayer.succeed(new RetryPolicy.Service {
+      val retryPolicy = new RetryPolicy {
         override val maxRetryNumberWhenTimeout: Int          = 1
         override val retryToAnotherAddressAfterSleepMs: Long = 1000L
-        override def isWorthRetryToAnotherAddress(code: Int, body: Array[Byte]): UIO[Boolean] =
-          if (code == 503) UIO(true) else UIO(false)
-      })
+        override def isWorthRetryToAnotherAddress(code: Int, body: Array[Byte]): Boolean =
+          if (code == 503) true else false
+      }
 
       val httpAction = new HttpAction {
         override def tryExecute(r: HttpRequest, maxRetryNumberWhenTimeout: Int): Task[(Int, Array[Byte])] =
@@ -175,11 +175,11 @@ object SmartClientTest extends DefaultRunnableSpec {
           }
       }
 
-      val layer = retryPolicy ++ addressDiscover
+      val layer = addressDiscover
 
       val scn = for {
         client  <- SmartClient.create(httpAction)
-        resFork <- client.execute(Http("/some/path")).fork
+        resFork <- client.execute(Http("/some/path"), retryPolicy).fork
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
       } yield res

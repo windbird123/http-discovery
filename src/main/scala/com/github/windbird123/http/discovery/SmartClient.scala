@@ -25,23 +25,26 @@ object SmartClient {
 class SmartClient(addressFactory: AddressFactory, httpAction: HttpAction = DefaultHttpAction) extends LazyLogging {
   def execute(
     req: HttpRequest,
+    retryPolicy: RetryPolicy,
     blackAddresses: UIO[Seq[String]] = UIO(Seq.empty)
-  ): ZIO[Blocking with Clock with Has[RetryPolicy.Service], Throwable, (Int, Array[Byte])] =
+  ): ZIO[Blocking with Clock, Throwable, (Int, Array[Byte])] =
     for {
       blacks                            <- blackAddresses
       _                                 <- addressFactory.exclude(blacks)
-      waitUntilServerIsAvailable        <- RetryPolicy.waitUntilServerIsAvailable
+      waitUntilServerIsAvailable        = retryPolicy.waitUntilServerIsAvailable
       chosen                            <- addressFactory.choose(waitUntilServerIsAvailable)
       request                           = addressFactory.build(chosen, req)
-      retryToAnotherAddressAfterSleepMs <- RetryPolicy.retryToAnotherAddressAfterSleepMs
-      maxRetryNumberWhenTimeout         <- RetryPolicy.maxRetryNumberWhenTimeout
+      retryToAnotherAddressAfterSleepMs = retryPolicy.retryToAnotherAddressAfterSleepMs
+      maxRetryNumberWhenTimeout         = retryPolicy.maxRetryNumberWhenTimeout
       res <- httpAction.tryExecute(request, maxRetryNumberWhenTimeout).catchSome {
-              case _: SocketException => execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
-              case t: Throwable       => ZIO.fail(t) // n 번 SocketTimeoutException 은 여기에 해당하며, client request 에 문제가 있는 것으로 봄
+              case _: SocketException =>
+                execute(req, retryPolicy, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+              case t: Throwable => ZIO.fail(t) // n 번 SocketTimeoutException 은 여기에 해당하며, client request 에 문제가 있는 것으로 봄
             }
       (code, body) = res
-      worthRetry   <- RetryPolicy.isWorthRetryToAnotherAddress(code, body)
-      result <- if (worthRetry) execute(req, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+      worthRetry   = retryPolicy.isWorthRetryToAnotherAddress(code, body)
+      result <- if (worthRetry)
+                 execute(req, retryPolicy, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
                else ZIO.succeed(res)
     } yield result
 }
