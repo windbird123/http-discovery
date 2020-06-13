@@ -9,7 +9,7 @@ object BlockingSmartClientSample {
   def main(args: Array[String]): Unit = {
     val addressDiscover = new AddressDiscover.Service {
       override val periodSec: Long = 300L
-      override def fetch(configString: String): Task[Seq[String]] =
+      override def fetch(): Task[Seq[String]] =
         UIO(Seq("https://jsonplaceholder.typicode.com"))
     }
 
