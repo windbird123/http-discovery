@@ -10,9 +10,12 @@ import zio.random.Random
 class AddressFactory(ref: Ref[Seq[String]], addressDiscover: AddressDiscover) extends LazyLogging {
   def fetchAndSet(): Task[Unit] =
     for {
-      addr <- addressDiscover.fetch().orElse(ref.get) // 실패할 경우 기존 주소를 그대로 유지한다.
-      _    <- ref.set(addr)
-      _    <- Task(logger.info(s"Base addresses are updated, addresses=[${addr.mkString(",")}]"))
+      addr <- addressDiscover
+               .fetch()
+               .tapError((t: Throwable) => UIO(logger.error("failed to fetch address from discover service", t)))
+               .orElse(ref.get) // 실패할 경우 기존 주소를 그대로 유지한다.
+      _ <- ref.set(addr)
+      _ <- Task(logger.info(s"Base addresses are updated, addresses=[${addr.mkString(",")}]"))
     } yield ()
 
   def scheduleUpdate(): ZIO[Clock with Random, Throwable, Unit] =
