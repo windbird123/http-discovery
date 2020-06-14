@@ -163,8 +163,33 @@ object SmartClientTest extends DefaultRunnableSpec {
         _       <- TestClock.adjust(100.seconds)
         res     <- resFork.join
       } yield assert(res._1)(equalTo(200)) && assert(res._2)(equalTo("success".getBytes(io.Codec.UTF8.name)))
-    }
+    },
+    testM("AddressDiscover.fetch() 가 실패하면, 기존 주소 그대로 유지되어야 한다.") {
+      val addressDiscover = new AddressDiscover {
+        val tryCount = new AtomicInteger(0)
 
-    // testM("AddresDiscover.fetch() 가 실패하면, 기존 주소 그대로 유지되어야 한다.")
+        override val periodSec: Long = 1L
+
+        // 최초 설정 이후에는 계속 주소 가져오는 것을 실패하도록 함
+        override def fetch(): Task[Seq[String]] =
+          for {
+            count <- UIO(tryCount.getAndIncrement())
+            _ <- ZIO.when(count >= 2) {
+                  Task.fail(new Exception("some exception !!!"))
+                }
+            success <- ZIO.succeed(Seq("http://good"))
+          } yield success
+      }
+
+      val retryPolicy = new RetryPolicy {
+        override val waitUntilServerIsAvailable: Boolean = false
+      }
+
+      for {
+        client <- SmartClient.create(addressDiscover, successHttpAction)
+        _      <- TestClock.adjust(5.seconds)
+        res    <- client.execute(Http("/some/path"), retryPolicy)
+      } yield assert(res._1)(equalTo(200))
+    }
   )
 }

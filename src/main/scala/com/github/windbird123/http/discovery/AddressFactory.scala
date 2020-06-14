@@ -12,7 +12,9 @@ class AddressFactory(ref: Ref[Seq[String]], addressDiscover: AddressDiscover) ex
     for {
       addr <- addressDiscover
                .fetch()
-               .tapError((t: Throwable) => UIO(logger.error("failed to fetch address from discover service", t)))
+               .tapError((t: Throwable) =>
+                 UIO(logger.error(s"failed to fetch address from discover service, ${t.getMessage}"))
+               )
                .orElse(ref.get) // 실패할 경우 기존 주소를 그대로 유지한다.
       _ <- ref.set(addr)
       _ <- Task(logger.info(s"Base addresses are updated, addresses=[${addr.mkString(",")}]"))
