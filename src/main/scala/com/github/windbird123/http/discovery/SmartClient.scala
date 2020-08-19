@@ -45,7 +45,7 @@ class SmartClient(addressFactory: AddressFactory, httpAction: HttpAction = Defau
       (code, body) = res
       worthRetry   = retryPolicy.isWorthRetryToAnotherAddress(code, body)
       result <- if (worthRetry)
-                 execute(req, retryPolicy, UIO(Seq(chosen))).delay(retryToAnotherAddressAfterSleepMs.millis)
+                 execute(req, retryPolicy, UIO(Seq.empty[String])).delay(retryToAnotherAddressAfterSleepMs.millis)
                else ZIO.succeed(res)
     } yield result
 }
